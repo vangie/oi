@@ -11,7 +11,7 @@
 #   -p, --problem  problem directory name under practice/. If omitted:
 #                  • auto-choose when only one problem exists
 #                  • interactive select when multiple problems present
-#   -c, --cxxflags  custom g++ flags (default: "-std=c++17 -O2 -pipe -Wall -Wextra")
+#   -c, --cxxflags  custom g++ flags (default: "-std=c++14 -O2 -pipe -Wall -Wextra")
 #                   Overrides CXXFLAGS env when provided.
 #   -t, --time      per-case CPU time limit in seconds (default: 2)
 #                   Overrides TIME_LIMIT env when provided.
@@ -20,7 +20,7 @@
 #   Example: CXXFLAGS="-std=c++20 -O3" ./judge.sh -g j -y 2024 -p poker
 #
 # Environment variables:
-#   CXXFLAGS   : flags passed to g++; if not set uses "-std=c++17 -O2 -pipe -Wall -Wextra".
+#   CXXFLAGS   : flags passed to g++; if not set uses "-std=c++14 -O2 -pipe -Wall -Wextra".
 #                The script prints the effective CXXFLAGS so you can verify overrides.
 #   TIME_LIMIT : per-case timeout in seconds           (default: 2)
 #
@@ -36,7 +36,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"  # repository root
 GROUP=""   # j: 普及组复赛试题, s: 提高组复赛试题
 YEAR=""
 PROBLEM=""
-CXXFLAGS="${CXXFLAGS:--std=c++17 -O2 -pipe -Wall -Wextra}"
+CXXFLAGS="${CXXFLAGS:--std=c++14 -O2 -pipe -Wall -Wextra}"
 TIME_LIMIT="${TIME_LIMIT:-2}"
 # Compiler (can be overridden via --cxx or CXX env var)
 CXX="${CXX:-g++}"
@@ -310,7 +310,10 @@ run_case() {
 for base in sample data; do
   test_subdir="$GROUP_PATH/$YEAR/$base/$PROBLEM"
   [[ -d "$test_subdir" ]] || continue
-  for in_file in "$test_subdir"/*.in; do
+  # Collect and sort test cases using version sort so 10 comes after 9
+  mapfile -t _test_inputs < <(printf '%s\n' "$test_subdir"/*.in | sort -V)
+
+  for in_file in "${_test_inputs[@]}"; do
     [[ -e "$in_file" ]] || continue
     ans_file="${in_file%.in}.ans"
     if [[ ! -f "$ans_file" ]]; then
