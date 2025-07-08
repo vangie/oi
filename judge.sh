@@ -38,6 +38,54 @@ YEAR=""
 PROBLEM=""
 CXXFLAGS="${CXXFLAGS:--std=c++17 -O2 -pipe -Wall -Wextra}"
 TIME_LIMIT="${TIME_LIMIT:-2}"
+# Compiler (can be overridden via --cxx or CXX env var)
+CXX="${CXX:-g++}"
+
+# --- Compiler Detection (macOS / Homebrew GCC) ---------------------------
+# If running on macOS and the compiler is still the default "g++" (which is
+# typically a Clang wrapper without <bits/stdc++.h>), attempt to locate a
+# GNU g++ installed via Homebrew (e.g. g++-14, g++-13, ...). The first one
+# found will be used.
+
+if [[ "$(uname -s)" == "Darwin" && "$CXX" == "g++" ]]; then
+  candidate=""
+
+  # 1) Prefer Homebrew-installed GCC (fast, reliable)
+  if command -v brew >/dev/null 2>&1; then
+    brew_bin="$(brew --prefix gcc 2>/dev/null || true)/bin"
+    if [[ -d "$brew_bin" ]]; then
+      candidate=$(ls "$brew_bin"/g++-* 2>/dev/null | sort -V | tail -n1 || true)
+    fi
+  fi
+
+  # 2) Fallback: look for any g++-* already in PATH
+  if [[ -z "$candidate" ]]; then
+    candidate=$(command -v g++-* 2>/dev/null | tr ' ' '\n' | sort -V | tail -n1 || true)
+  fi
+
+  # 3) Still none? Attempt automatic Homebrew installation of gcc
+  if [[ -z "$candidate" && -z "${CXX_INSTALLED_ALREADY:-}" ]]; then
+    if command -v brew >/dev/null 2>&1; then
+      echo "[INFO] GNU g++ not detected. Attempting \"brew install gcc\" (this may take a while)..." >&2
+      if brew install gcc >/dev/null; then
+        export CXX_INSTALLED_ALREADY=1
+        brew_bin="$(brew --prefix gcc 2>/dev/null || true)/bin"
+        if [[ -d "$brew_bin" ]]; then
+          candidate=$(ls "$brew_bin"/g++-* 2>/dev/null | sort -V | tail -n1 || true)
+        fi
+      else
+        echo "[ERROR] Homebrew installation of gcc failed." >&2
+      fi
+    else
+      echo "[ERROR] Homebrew not found; cannot auto-install gcc. Install it manually or set CXX." >&2
+    fi
+  fi
+
+  if [[ -n "$candidate" && -x "$candidate" ]]; then
+    echo "[INFO] Detected GNU C++ compiler: $candidate"
+    CXX="$candidate"
+  fi
+fi
 
 # No external 'timeout' command is required; we rely on ulimit -t for CPU time.
 TIMEOUT_CMD=""
@@ -197,9 +245,10 @@ mkdir -p "$(dirname "$EXE")"
 src_rel="${SRC_CPP#$SCRIPT_DIR/}"
 exe_rel="${EXE#$SCRIPT_DIR/}"
 echo "Compiling $src_rel -> $exe_rel"
+echo "Compiler  : $CXX"
 echo "Compile flags: $CXXFLAGS"
 echo "CPU time limit : ${TIME_LIMIT}s"
-if ! g++ $CXXFLAGS -o "$EXE" "$SRC_CPP"; then
+if ! "$CXX" $CXXFLAGS -o "$EXE" "$SRC_CPP"; then
   echo "Compilation failed." >&2
   exit 1
 fi
