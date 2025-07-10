@@ -4,7 +4,7 @@
 # Compiles the specified C++ solution (located in ./practice/<problem>/<problem>.cpp)
 # and tests it against available test cases.
 #
-# Usage: ./judge.sh [-g <j|s>] [-y <year>] [-p <problem>] [-c <cxxflags>] [-t <seconds>]
+# Usage: ./judge.sh [-g <j|s>] [-y <year>] [-p <problem>] [-c <cxxflags>] [-t <seconds>] [-s <case.in>]
 #   -g, --group    j  普及组复赛试题   (interactive select if absent)
 #                  s  提高组复赛试题
 #   -y, --year     4-digit year (e.g. 2024). If omitted, auto-detect or select.
@@ -15,6 +15,7 @@
 #                   Overrides CXXFLAGS env when provided.
 #   -t, --time      per-case CPU time limit in seconds (default: 2)
 #                   Overrides TIME_LIMIT env when provided.
+#   -s, --case      run only specified test input file (.in). Can be given multiple times.
 #   positional <problem> is still accepted for backward compatibility.
 #
 #   Example: CXXFLAGS="-std=c++20 -O3" ./judge.sh -g j -y 2024 -p poker
@@ -38,6 +39,8 @@ YEAR=""
 PROBLEM=""
 CXXFLAGS="${CXXFLAGS:--std=c++14 -O2 -pipe -Wall -Wextra}"
 TIME_LIMIT="${TIME_LIMIT:-2}"
+# Specific test cases (paths to .in files)
+CASE_PATHS=()
 # Compiler (can be overridden via --cxx or CXX env var)
 CXX="${CXX:-g++}"
 
@@ -116,6 +119,8 @@ while [[ $# -gt 0 ]]; do
       CXXFLAGS="$2"; shift 2;;
     -t|--time)
       TIME_LIMIT="$2"; shift 2;;
+    -s|--case)
+      CASE_PATHS+=("$2"); shift 2;;
     *) break;;
   esac
 done
@@ -297,7 +302,6 @@ run_case() {
       echo "[PASS] $rel_file (${dur_ms} ms)"
     else
       echo "[FAIL] $rel_file (${dur_ms} ms)"
-      diff -u --strip-trailing-cr "$ans_file" "$workdir/${PROBLEM}.out" || true
       ((fail++))
     fi
   fi
@@ -306,24 +310,45 @@ run_case() {
   rm -f "$workdir/${PROBLEM}.in" "$workdir/${PROBLEM}.out"
 }
 
-# Detect available test groups (sample / data); skip if directory missing
-for base in sample data; do
-  test_subdir="$GROUP_PATH/$YEAR/$base/$PROBLEM"
-  [[ -d "$test_subdir" ]] || continue
-  # Collect and sort test cases using version sort so 10 comes after 9
-  mapfile -t _test_inputs < <(printf '%s\n' "$test_subdir"/*.in | sort -V)
+# --- Collect Test Cases -------------------------------------------------
+# Build a single list (_test_cases) containing either the user-specified
+# case paths or the automatically discovered ones. This removes duplicated
+# logic for running/validating cases.
 
-  for in_file in "${_test_inputs[@]}"; do
-    [[ -e "$in_file" ]] || continue
-    ans_file="${in_file%.in}.ans"
-    if [[ ! -f "$ans_file" ]]; then
-      echo "Answer file missing for $in_file" >&2
-      continue
+_test_cases=()
+
+if [[ ${#CASE_PATHS[@]} -gt 0 ]]; then
+  # Use only user-provided case paths
+  for in_file in "${CASE_PATHS[@]}"; do
+    if [[ ! -f "$in_file" ]]; then
+      echo "Specified case not found: $in_file" >&2; exit 1
     fi
-    total=$((total + 1))
-    tests_found=true
-    run_case "$in_file" "$ans_file"
+    _test_cases+=("$in_file")
   done
+else
+  # Auto-discover cases under sample/ and data/
+  for base in sample data; do
+    test_subdir="$GROUP_PATH/$YEAR/$base/$PROBLEM"
+    [[ -d "$test_subdir" ]] || continue
+    mapfile -t _found < <(printf '%s\n' "$test_subdir"/*.in | sort -V)
+    for in_file in "${_found[@]}"; do
+      [[ -e "$in_file" ]] || continue
+      _test_cases+=("$in_file")
+    done
+  done
+fi
+
+# --- Execute Test Cases --------------------------------------------------
+
+for in_file in "${_test_cases[@]}"; do
+  ans_file="${in_file%.in}.ans"
+  if [[ ! -f "$ans_file" ]]; then
+    echo "Answer file missing for $in_file" >&2
+    continue
+  fi
+  total=$((total + 1))
+  tests_found=true
+  run_case "$in_file" "$ans_file"
 done
 
 echo "----------------------------------------"
