@@ -109,7 +109,7 @@ fi
 
 # --- GNU date / coreutils Check -----------------------------------------
 DATE_CMD="date"
-if ! date +%s%N >/dev/null 2>&1; then
+if ! [[ "$(date +%s%N 2>/dev/null)" =~ ^[0-9]+$ ]]; then
   if command -v gdate >/dev/null 2>&1; then
     DATE_CMD="gdate"
   else
