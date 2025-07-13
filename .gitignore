@@ -1,2 +1,4 @@
 # Ignore all practice solution directories (user code)
 **/practice/**
+.vscode/
+.DS_Store

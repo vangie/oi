@@ -107,6 +107,23 @@ if ! command -v timeout >/dev/null 2>&1; then
   fi
 fi
 
+# --- GNU date / coreutils Check -----------------------------------------
+DATE_CMD="date"
+if ! date +%s%N >/dev/null 2>&1; then
+  if command -v gdate >/dev/null 2>&1; then
+    DATE_CMD="gdate"
+  else
+    echo "[INFO] 'date' command lacks nanoseconds support. Attempting to install coreutils via Homebrew..." >&2
+    if command -v brew >/dev/null 2>&1; then
+      brew install coreutils || { echo "[ERROR] Homebrew installation failed." >&2; exit 1; }
+    else
+      echo "[ERROR] Homebrew not found. Please install 'coreutils' manually (provides 'gdate')." >&2
+      exit 1
+    fi
+    DATE_CMD="gdate"
+  fi
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -g|--group)
@@ -275,7 +292,7 @@ run_case() {
 
   # record start time (nanoseconds)
   local start_ns end_ns dur_ms
-  start_ns=$(date +%s%N)
+  start_ns=$("$DATE_CMD" +%s%N)
 
   # Execute under CPU time limit only
   if ! (cd "$workdir" && \
@@ -288,7 +305,7 @@ run_case() {
   fi
 
   # compute duration
-  end_ns=$(date +%s%N)
+  end_ns=$("$DATE_CMD" +%s%N)
   dur_ms=$(( (end_ns - start_ns)/1000000 ))
 
   if [[ ! -f "$workdir/${PROBLEM}.out" ]]; then
